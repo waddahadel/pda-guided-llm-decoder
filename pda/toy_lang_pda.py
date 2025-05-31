@@ -83,3 +83,16 @@ class ToyLangPDA:
 
     def get_state(self):
         return self.state
+    def accepts(self, input_string):
+        self.reset()
+        for token in input_string:
+            print(f"Processing token: {token}")
+            if not self.is_valid_token(token):
+                print(f"Rejected at token: {token}")
+                return False
+        print("All tokens processed")
+        print(f"Current PDA state: {self.get_state()}")
+        return self.is_accept_state()
+
+    def is_accept_state(self):
+        return self.state == 'START'

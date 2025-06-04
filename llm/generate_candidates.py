@@ -4,7 +4,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from .model_setup import load_model
 
-def get_top_k_candidates(prompt, k=10, model_name="gpt2", device="cpu"):
+def get_top_k_candidates(prompt, k=10, model_name="gpt2", device="cuda"):
     tokenizer, model = load_model(model_name)
     model.to(device)
 

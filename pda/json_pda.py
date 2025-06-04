@@ -3,164 +3,183 @@ import copy
 class JsonPDA:
     def __init__(self):
         self.reset()
-
+    
     def reset(self):
         self.state = 'START'
         self.stack = []
-
+        self.buffer = ""  # For building strings/numbers
+        self.escape = False  # For tracking escape sequences
+        self.last_states = []  # For nested state tracking
+    
     def clone(self):
         return copy.deepcopy(self)
-
-    def log_state(self):
-        print(f"[PDA] State: {self.state}, Stack: {self.stack}")
-
-    def __str__(self):
-        return f"JsonPDA(state={self.state}, stack={self.stack})"
-
-    def is_valid_token(self, token, partial=False):
-        token = token.strip()
+    
+    def consume_char(self, char, partial=False):
+        # Handle string escape sequences first
+        if self.state == 'IN_STRING':
+            if self.escape:
+                self.buffer += char
+                self.escape = False
+                return True
+            elif char == '\\':
+                self.escape = True
+                return True
+            elif char == '"':
+                self.state = self.stack.pop()  # Return to previous state
+                return True
+            else:
+                self.buffer += char
+                return True
+        
+        # Skip whitespace except in strings
+        if char.isspace() and self.state != 'IN_STRING':
+            return True
+            
+        # Main state machine
         if self.state == 'START':
-            if token == '{':
+            if char == '{':
                 self.stack.append('}')
                 self.state = 'EXPECT_KEY_OR_END'
                 return True
-            elif token == '[':
+            elif char == '[':
                 self.stack.append(']')
-                self.state = 'EXPECT_VALUE_OR_END_ARRAY'
-                return True
-            elif self.is_value(token, partial=partial):
-                self.state = 'END'
+                self.state = 'EXPECT_VALUE_OR_END'
                 return True
             return False
-
+        
         elif self.state == 'EXPECT_KEY_OR_END':
-            if token == '}':
+            if char == '}':
                 if not self.stack or self.stack.pop() != '}':
                     return False
-                self.state = self.next_after_value()
+                self.state = self._get_next_state()
                 return True
-            elif self.is_string(token, partial=partial):
-                self.state = 'EXPECT_COLON'
+            elif char == '"':
+                self.stack.append('EXPECT_COLON')
+                self.state = 'IN_STRING'
+                self.buffer = ""
                 return True
             return False
-
+        
         elif self.state == 'EXPECT_COLON':
-            if token == ':':
+            if char == ':':
                 self.state = 'EXPECT_VALUE'
                 return True
             return False
-
+        
         elif self.state == 'EXPECT_VALUE':
-            if token == '{':
+            if char == '{':
                 self.stack.append('}')
                 self.state = 'EXPECT_KEY_OR_END'
                 return True
-            elif token == '[':
+            elif char == '[':
                 self.stack.append(']')
-                self.state = 'EXPECT_VALUE_OR_END_ARRAY'
+                self.state = 'EXPECT_VALUE_OR_END'
                 return True
-            elif self.is_value(token, partial=partial):
-                self.state = 'EXPECT_COMMA_OR_END_OBJ'
+            elif char == '"':
+                self.stack.append('EXPECT_COMMA_OR_END')
+                self.state = 'IN_STRING'
+                self.buffer = ""
+                return True
+            elif self._is_primitive_start(char):
+                self.stack.append('EXPECT_COMMA_OR_END')
+                self.state = 'IN_PRIMITIVE'
+                self.buffer = char
                 return True
             return False
-
-        elif self.state == 'EXPECT_COMMA_OR_END_OBJ':
-            if token == ',':
-                self.state = 'EXPECT_KEY_OR_END'
+        
+        elif self.state == 'IN_PRIMITIVE':
+            if self._is_primitive_char(char):
+                self.buffer += char
                 return True
-            elif token == '}':
-                if not self.stack or self.stack.pop() != '}':
+            else:
+                # End of primitive
+                if not self._validate_primitive():
                     return False
-                self.state = self.next_after_value()
-                return True
-            return False
-
-        elif self.state == 'EXPECT_VALUE_OR_END_ARRAY':
-            if token == ']':
+                self.state = self.stack.pop()
+                return self.consume_char(char, partial)  # Reprocess the char
+        
+        elif self.state == 'EXPECT_VALUE_OR_END':
+            if char == ']':
                 if not self.stack or self.stack.pop() != ']':
                     return False
-                self.state = self.next_after_value()
+                self.state = self._get_next_state()
                 return True
-            elif token == '{':
-                self.stack.append('}')
-                self.state = 'EXPECT_KEY_OR_END'
-                return True
-            elif token == '[':
-                self.stack.append(']')
-                self.state = 'EXPECT_VALUE_OR_END_ARRAY'
-                return True
-            elif self.is_value(token, partial=partial):
-                self.state = 'EXPECT_COMMA_OR_END_ARRAY'
-                return True
+            elif char in '{["' or self._is_primitive_start(char):
+                self.stack.append('EXPECT_COMMA_OR_END')
+                return self.consume_char(char, partial)
             return False
-
-        elif self.state == 'EXPECT_COMMA_OR_END_ARRAY':
-            if token == ',':
-                self.state = 'EXPECT_VALUE_OR_END_ARRAY'
+        
+        elif self.state == 'EXPECT_COMMA_OR_END':
+            if char == ',':
+                top = self.stack[-1] if self.stack else None
+                if top == '}':
+                    self.state = 'EXPECT_KEY_OR_END'
+                else:
+                    self.state = 'EXPECT_VALUE_OR_END'
                 return True
-            elif token == ']':
-                if not self.stack or self.stack.pop() != ']':
+            elif char in ']}':
+                if not self.stack or self.stack[-1] != char:
                     return False
-                self.state = self.next_after_value()
+                self.stack.pop()
+                self.state = self._get_next_state()
                 return True
             return False
-
+        
         elif self.state == 'END':
             return False
-
+        
         return False
-
-    def next_after_value(self):
+    
+    def _get_next_state(self):
         if not self.stack:
             return 'END'
         top = self.stack[-1]
-        return {
-            '}': 'EXPECT_COMMA_OR_END_OBJ',
-            ']': 'EXPECT_COMMA_OR_END_ARRAY',
-        }.get(top, 'END')
-
-    def is_value(self, token, partial=False):
-        return (
-            self.is_string(token, partial=partial)
-            or self.is_number(token, partial=partial)
-            or token in ('true', 'false', 'null')
-        )
-
-    def is_string(self, token, partial=False):
-        # Strip whitespace first
-        clean_token = token.strip()
-        if not clean_token.startswith('"'):
+        return 'EXPECT_COMMA_OR_END' if top in '}]' else 'END'
+    
+    def _is_primitive_start(self, char):
+        return char.isdigit() or char == '-' or char.lower() in ('t', 'f', 'n')
+    
+    def _is_primitive_char(self, char):
+        if not self.buffer:
             return False
-        if not partial:
-            return len(clean_token) >= 2 and clean_token.endswith('"') and not clean_token.endswith('\\"')
-        # In partial mode, allow strings that start with " but are not yet closed
-        return True
-
-    def is_number(self, token, partial=False):
+        first_char = self.buffer[0].lower()
+        
+        # Number
+        if first_char.isdigit() or first_char == '-':
+            return (char.isdigit() or char in '.eE+-' or 
+                   (char in 'eE' and 'e' not in self.buffer.lower() and 
+                    'E' not in self.buffer.lower()))
+        # Boolean/null
+        elif first_char == 't':
+            return len(self.buffer) < 4 and char in 'true'[len(self.buffer):]
+        elif first_char == 'f':
+            return len(self.buffer) < 5 and char in 'false'[len(self.buffer):]
+        elif first_char == 'n':
+            return len(self.buffer) < 4 and char in 'null'[len(self.buffer):]
+        return False
+    
+    def _validate_primitive(self):
+        if not self.buffer:
+            return False
+        s = self.buffer.lower()
+        if s in ('true', 'false', 'null'):
+            return True
         try:
-            float(token)
+            float(s)
             return True
         except ValueError:
-            if partial:
-                # Accept partial numeric patterns like '2.', '3e', '4e-'
-                import re
-                return re.fullmatch(r'-?\d+(\.\d*)?([eE][+-]?)?', token) is not None
             return False
-
-    def partial_token_ok(self, token):
-        return self.is_string(token, partial=True) or self.is_number(token, partial=True)
-
-    def accepts(self, tokens, partial=True):
+    
+    def accepts(self, chars, partial=False):
         self.reset()
-        for i, token in enumerate(tokens):
-            print(f"Processing token: {token}")
-            is_last = i == len(tokens) - 1
-            if not self.is_valid_token(token, partial=partial):
-                if partial and is_last and self.partial_token_ok(token):
-                    print(f"Accepting partial token: {token}")
+        for i, char in enumerate(chars):
+            if not self.consume_char(char, partial):
+                if partial and i == len(chars)-1 and self._is_partial_acceptable():
                     return True
-                print(f"Rejected at token: {token}")
                 return False
-        if partial:
-            return True
-        return self.state == 'END' and len(self.stack) == 0
+        return True if partial else (self.state == 'END' and not self.stack)
+    
+    def _is_partial_acceptable(self):
+        return (self.state in ('IN_STRING', 'IN_PRIMITIVE') or 
+               (self.state == 'EXPECT_VALUE' and self.buffer) or
+               (self.state == 'EXPECT_VALUE_OR_END' and self.buffer))

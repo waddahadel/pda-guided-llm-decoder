@@ -1,15 +1,13 @@
 from llm.generate_candidates import get_top_k_candidates
-from tokenizors.json_tokenizor import JsonTokenizer
 from pda.json_pda import JsonPDA
 
 
 def generate_valid_json(
     prompt: str,
-    max_steps: int = 20,
+    max_steps: int = 50,
     top_k: int = 10,
     model_name: str = "gpt2"
 ):
-    tokenizer = JsonTokenizer()
     pda = JsonPDA()
 
     # Step 1: Generate the initial JSON starting string WITHOUT PDA filtering
@@ -32,11 +30,10 @@ def generate_valid_json(
     json_prompt = current_prompt[json_start:]
     print(f"Starting PDA filtering from JSON substring:\n{json_prompt}")
 
-    # Step 2: Initialize PDA with the initial json_prompt
-    tokens = tokenizer.tokenize(json_prompt)
-    for token in tokens:
-        if not pda.is_valid_token(token):
-            print(f"PDA rejected initial JSON token: {token}")
+    # Step 2: Initialize PDA with the initial json_prompt, char-by-char
+    for c in json_prompt:
+        if not pda.consume_char(c, partial=True):
+            print(f"PDA rejected initial JSON char: {repr(c)}")
             return json_prompt  # stop early if initial JSON is invalid
 
     current_prompt = json_prompt
@@ -49,16 +46,14 @@ def generate_valid_json(
         for token in candidates:
             clean_token = token.lstrip()
             candidate_pda = pda.clone()
-            try:
-                # Only tokenize the new token, since current_prompt was already accepted
-                tokenized = tokenizer.tokenize(clean_token)
-            except SyntaxError:
-                continue
+            success = True
 
-            if len(tokenized) != 1:
-                continue  # only allow single-token candidates
+            for i, char in enumerate(clean_token):
+                if not candidate_pda.consume_char(char, partial=(i == len(clean_token) - 1)):
+                    success = False
+                    break
 
-            if candidate_pda.is_valid_token(tokenized[0]):
+            if success:
                 print(f"[Step {step}] Accepted token: {repr(token)}")
                 pda = candidate_pda  # advance PDA state
                 current_prompt += token

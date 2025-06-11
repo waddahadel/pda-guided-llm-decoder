@@ -4,7 +4,7 @@ from pda.json_pda import JsonPDA
 
 def generate_valid_json(
     prompt: str,
-    max_steps: int = 50,
+    max_steps: int = 200,
     top_k: int = 10,
     model_name: str = "gpt2"
 ):

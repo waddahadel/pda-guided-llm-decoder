@@ -24,10 +24,10 @@ def generate_with_pda(
         str: The complete prompt followed by generated JSON instance
     """
     # Extract just the instance generation portion (after schema)
-    if '</schema>' in prompt:
-        generation_prompt = prompt.split('</schema>')[-1].strip()
-    else:
-        generation_prompt = prompt
+    #if '</schema>' in prompt:
+     #   generation_prompt = prompt.split('</schema>')[-1].strip()
+    #else:
+    generation_prompt = prompt
     
     # Initialize PDA and track generation state
     pda = JsonPDA()
@@ -80,7 +80,7 @@ def generate_with_pda(
             break
 
     # Combine original prompt with generated JSON
-    full_output = prompt + "\n\n" + generated_json
+    full_output = "\n\n" + generated_json
     print("\n--- Final Output ---")
     print(full_output)
     return full_output

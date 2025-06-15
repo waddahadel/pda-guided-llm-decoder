@@ -16,7 +16,7 @@ def extract_reference_completion(sample):
 
 
 def generate_standard(prompt, model, tokenizer, max_new_tokens=200):
-    """Free‑form GPT‑2 sampling (top‑k / nucleus) without PDA constraints."""
+    # regular generation with no constraints
     inputs = tokenizer(prompt, return_tensors="pt")
     input_ids = inputs.input_ids.to(model.device)
     attention_mask = inputs.attention_mask.to(model.device)
@@ -50,13 +50,11 @@ def main():
 
     tokenizer, model = load_model(model_name)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # model.to(device)
+    
 
 
-    num_samples = 100
-    standard_correct = 0
-    pda_correct = 0
+    num_samples = 10
+    
 
     for i, example in enumerate(dataset):
         if i >= num_samples:
@@ -69,32 +67,16 @@ def main():
 
         # --- Standard generation ---
         std_gen = generate_standard(prompt_str, model, tokenizer)
-        std_correct = std_gen.strip() == reference_completion.strip()
-        print(f"Standard generation correct? {std_correct}")
-        print(f"  Output: {std_gen}")
-        print(f"  Reference: {reference_completion}")
+        print(f"  Standard Model Output: {std_gen} \n")
 
         # --- PDA‑guided generation ---
         pda_gen = generate_with_pda(prompt_str, model, tokenizer)
-        pda_correct_flag = pda_gen.strip() == reference_completion.strip()
-        print(f"PDA-guided generation correct? {pda_correct_flag}")
-        print(f"  Output: {pda_gen}")
+        print(f"  PDA Augumented Model Output: {pda_gen} \n")
         print(f"  Reference: {reference_completion}")
 
-        if std_correct:
-            standard_correct += 1
-        if pda_correct_flag:
-            pda_correct += 1
+        
 
-    # Summary
-    print("\n--- Evaluation Summary ---")
-    print(
-        f"Samples evaluated: {num_samples}\n"
-        f"Standard generation correct completions: {standard_correct} "
-        f"({standard_correct / num_samples * 100:.2f}%)\n"
-        f"PDA-guided generation correct completions: {pda_correct} "
-        f"({pda_correct / num_samples * 100:.2f}%)"
-    )
+    
 
 
 if __name__ == "__main__":

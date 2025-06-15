@@ -34,7 +34,7 @@ def generate_with_pda(
     generated_json = "{"
     pda.consume_char('{')  # Start JSON object
     
-    print(f"Starting JSON generation from prompt:\n{generation_prompt}")
+    print(f"Starting JSON generation from prompt:")
 
     # Generation loop
     for step in range(max_steps):

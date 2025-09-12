@@ -1,0 +1,14 @@
+torch==2.3.1
+torchvision==0.18.1
+# -- Your other packages below --
+transformers>=4.38.0
+tqdm>=4.66.0
+numpy>=1.24.0
+datasets>=2.16.0
+huggingface_hub>=0.20.0
+accelerate>=0.27.0
+bitsandbytes
+tiktoken
+protobuf
+blobfile
+sentencepiece

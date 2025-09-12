@@ -1,0 +1,26 @@
+# HTCondor Submit File for JSON PDA Decoding Experiment
+
+# (1) The universe must be docker for the SIC cluster
+universe = docker
+
+# (2) Use a Miniconda image that comes with Python, pip, and Conda.
+docker_image = continuumio/miniconda3
+
+# (3) The executable is our dedicated JSON shell script
+executable = run_json.sh
+
+# (4) Define the resource requirements for the job
+request_gpus = 1
+request_cpus = 8
+request_memory = 32GB
+
+# (5) Tell Condor to mount your /home directory inside the container
++WantGPUHomeMounted = true
+
+# (6) Define unique output files for this experiment
+output = pda_json_job.out.$(Process)
+error = pda_json_job.err.$(Process)
+log = pda_json_job.log.$(Process)
+
+# (7) Queue the job to run one time
+queue 1

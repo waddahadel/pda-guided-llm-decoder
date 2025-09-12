@@ -1,80 +1,102 @@
 import json
-import torch
+import pandas as pd
 from datasets import load_dataset
+from tqdm import tqdm
+
 from llm.model_setup import load_model
-from llm.pda_augumented_generation import generate_with_pda
+from llm.pda_augmented_generation import generate_with_pda 
+from pda.json_pda import JsonPDA
+from evaluation.utils import generate_standard
 
+def extract_prompt(prompt_list: list) -> str:
+    """Extracts and combines system and user messages for the prompt."""
+    return "\n".join(msg["content"] for msg in prompt_list if msg["role"] in ("system", "user"))
 
-def extract_prompt(prompt_list):
-    # Only system and user messages
-    return "\n".join(msg["content"] for msg in prompt_list
-                     if msg["role"] in ("system", "user"))
-
-def extract_reference_completion(sample):
-    return sample["completion"]
-
-
-
-def generate_standard(prompt, model, tokenizer, max_new_tokens=200):
-    # regular generation with no constraints
-    inputs = tokenizer(prompt, return_tensors="pt")
-    input_ids = inputs.input_ids.to(model.device)
-    attention_mask = inputs.attention_mask.to(model.device)
-
-    with torch.no_grad():
-        outputs = model.generate(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            top_k=50,
-            top_p=0.95,
-            temperature=0.7,
-            eos_token_id=tokenizer.eos_token_id,
-        )
-
-    full_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return (
-        full_text[len(prompt) :].strip()  # strip the echoed prompt
-        if full_text.startswith(prompt)
-        else full_text.strip()
-    )
-
+def is_valid_json(s: str) -> bool:
+    """Validate if a string is proper JSON."""
+    try:
+        if not s.strip().startswith('{') or not s.strip().endswith('}'):
+             return False
+        json.loads(s)
+        return True
+    except json.JSONDecodeError:
+        return False
 
 def main():
-    # Dataset
-    dataset = load_dataset("NousResearch/json-mode-eval", split="train")
-
-    # Model + tokenizer (loaded via helper)
-    model_name = "google/gemma-2-2b"
-
-    tokenizer, model = load_model(model_name)
-
+    """Main function to run the entire JSON evaluation pipeline."""
+    # --- Evaluation Configuration ---
+    MODEL_NAME = "google/gemma-2-2b-it"
     
-
-
-    num_samples = 10
     
+    DATASET_NAME = "NousResearch/json-mode-eval"
+    DATASET_SPLIT = "train"
+    NUM_SAMPLES = 100
 
-    for i, example in enumerate(dataset):
-        if i >= num_samples:
+    # --- setup ---
+    print("Loading model and tokenizer...")
+    tokenizer, model = load_model(MODEL_NAME)
+    
+    print(f"Loading dataset '{DATASET_NAME}'...")
+
+    dataset = load_dataset(DATASET_NAME, split=DATASET_SPLIT, streaming=True)
+    
+    results = []
+
+    print(f"\n--- Starting Evaluation on {NUM_SAMPLES} samples ---")
+    dataset_iterator = iter(dataset)
+    for i in range(NUM_SAMPLES):
+        try:
+            example = next(dataset_iterator)
+        except StopIteration:
             break
 
+        print(f"\n\n{'='*25} Processing Sample {i + 1} {'='*25}")
+
         prompt_str = extract_prompt(example["prompt"])
-        reference_completion = extract_reference_completion(example)
+        reference_completion = example["completion"]
 
-        print(f"\n=== Sample {i + 1} ===")
-
-        # --- Standard generation ---
-        std_gen = generate_standard(prompt_str, model, tokenizer)
-        print(f"  Standard Model Output: {std_gen} \n")
-
-        # --- PDA‑guided generation ---
-        pda_gen = generate_with_pda(prompt_str, model, tokenizer)
-        print(f"  PDA Augumented Model Output: {pda_gen} \n")
-        print(f"  Reference: {reference_completion}")
+        # 1. PDA-guided generation (this function already has the step-by-step prints)
+        pda_gen = generate_with_pda(prompt_str, model, tokenizer, max_steps=200)
 
         
+        print("\n--- Final Comparison ---")
+        print(f"[PDA Output]:\n{pda_gen}")
+        
+        print(f"\n[Reference JSON]:\n{reference_completion}")
+        print("=" * 70)
+        
+        is_std_valid = is_valid_json(std_gen)
+        
+        try:
+            norm_ref = ' '.join(json.dumps(json.loads(reference_completion), sort_keys=True).split())
+        except json.JSONDecodeError:
+            norm_ref = reference_completion 
+
+        try:
+            norm_std = ' '.join(json.dumps(json.loads(std_gen), sort_keys=True).split())
+            std_em = (norm_std == norm_ref)
+        except json.JSONDecodeError:
+            std_em = False
+
+        try:
+            norm_pda = ' '.join(json.dumps(json.loads(pda_gen), sort_keys=True).split())
+            pda_em = (norm_pda == norm_ref)
+        except json.JSONDecodeError:
+            pda_em = False
+
+        results.append({
+            "id": i,
+            "prompt": prompt_str,
+            "reference_json": reference_completion,
+            "standard_gen": std_gen,
+            "pda_gen": pda_gen,
+            "std_is_valid": is_std_valid,
+            "std_exact_match": std_em,
+            "pda_exact_match": pda_em,
+        })
+
+   
+
 
     
 

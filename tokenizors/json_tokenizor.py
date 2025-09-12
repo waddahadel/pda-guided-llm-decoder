@@ -3,10 +3,10 @@ import re
 class JsonTokenizer:
     def __init__(self):
         self.token_specification = [
-            ('STRING',         r'"[^"\\]*(?:\\.[^"\\]*)*"'),  # Complete quoted string
-            ('PARTIAL_STRING', r'"[^"\\]*(?:\\.[^"\\]*)*'),   # Starts with quote, but no ending quote
-            ('NUMBER',         r'-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?'),  # Complete number
-            ('PARTIAL_NUMBER', r'-?\d+(?:\.\d*|[eE][+-]?)?$'),        # Ends with dot or e
+            ('STRING',         r'"[^"\\]*(?:\\.[^"\\]*)*"'),  
+            ('PARTIAL_STRING', r'"[^"\\]*(?:\\.[^"\\]*)*'),   
+            ('NUMBER',         r'-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?'),  
+            ('PARTIAL_NUMBER', r'-?\d+(?:\.\d*|[eE][+-]?)?$'),        
             ('TRUE',           r'true'),
             ('FALSE',          r'false'),
             ('NULL',           r'null'),
@@ -16,8 +16,8 @@ class JsonTokenizer:
             ('RBRACKET',       r'\]'),
             ('COLON',          r':'),
             ('COMMA',          r','),
-            ('WHITESPACE',     r'[ \t\n\r]+'),  # Skip whitespace
-            ('MISMATCH',       r'.'),           # Any other character
+            ('WHITESPACE',     r'[ \t\n\r]+'),  
+            ('MISMATCH',       r'.'),           
         ]
         self.regex = re.compile('|'.join(f'(?P<{name}>{pattern})' for name, pattern in self.token_specification))
 
@@ -30,7 +30,7 @@ class JsonTokenizer:
                 raise SyntaxError(f"Unexpected character at position {pos}: {json_str[pos]!r}")
 
             kind = match.lastgroup
-            value = match.group().strip()  # Strip whitespace here
+            value = match.group().strip()  
             
             if kind == 'WHITESPACE':
                 pos = match.end()

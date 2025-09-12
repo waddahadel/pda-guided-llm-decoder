@@ -1,9 +1,9 @@
 from datasets import load_dataset
 
-# Load the dataset
+# we load the dataset
 dataset = load_dataset("NousResearch/json-mode-eval", split="train")
 
-# Let's look at the first few samples
+# I just want to look at the first few samples
 for i in range(3):
     sample = dataset[i]
     print(f"\n=== Sample {i} ===")

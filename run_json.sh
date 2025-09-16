@@ -12,7 +12,7 @@ echo "Conda environment activated."
 
 # --- Authentication ---
 # Your Hugging Face access token.
-#export HF_TOKEN="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"
+export HF_TOKEN="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"
 
 echo "Installing required Python packages via pip..."
 pip install -r requirements.txt --no-cache-dir
